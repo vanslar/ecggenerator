@@ -5,7 +5,7 @@ import numpy as np
 import time
 import os
 
-class EcgGenerator:
+class EcgGenerator_CharRnn:
     def __init__(self, cell_units_count, layer_count, batch_count, seq_length, learning_rate, train_keep_prob):
         self.cell_units_count = cell_units_count
         self.layer_count = layer_count
