@@ -6,8 +6,9 @@ import time
 import os
 
 class EcgGenerator:
-    def __init__(self, cell_units_count, layer_count, batch_count, seq_length, learning_rate, train_keep_prob, seq_gen_length):
+    def __init__(self, cell_units_count, cell_units_feature_len, layer_count, batch_count, seq_length, learning_rate, train_keep_prob, seq_gen_length):
         self.cell_units_count = cell_units_count
+        self.cell_units_feature_len = cell_units_feature_len
         self.layer_count = layer_count
         self.batch_count = batch_count
         self.seq_length  = seq_length
@@ -31,11 +32,12 @@ class EcgGenerator:
     
     def build_model(self):
         def _get_cell(cell_units_count, out_keep_prob):
-            cell = tf.nn.rnn_cell.BasicLSTMCell(cell_units_count)
+            #cell = tf.nn.rnn_cell.BasicLSTMCell(cell_units_count)
+            cell = tf.nn.rnn_cell.BasicRNNCell(cell_units_count)
             drop = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=out_keep_prob)
             return drop
         with tf.name_scope('lstm_model'):
-            self.cells = tf.nn.rnn_cell.MultiLSTMCell([_get_cell(self.cell_units_count, self.keep_prob) for _ in range(self.layer_count)])
+            self.cells = tf.nn.rnn_cell.MultiRNNCell([_get_cell(self.cell_units_count, self.keep_prob) for _ in range(self.layer_count)])
             self.init_state = self.cells.zero_state(self.batch_count, tf.float32)
 
             self.lstm_out, self.lstm_state = tf.nn.dynamic_rnn(self.cells, self.inputs, initial_state=self.init_state)
