@@ -25,7 +25,12 @@ class EcgGenerator:
     def build_input(self):
         with tf.name_scope('input'):
             self.inputs_ori = tf.placeholder(tf.float32, shape=(self.batch_count, self.seq_length), name='inputs')
-            self.inputs  = tf.expand_dims(self.inputs_ori, 2)
+
+            temp = np.zeros([self.batch_count, self.seq_length])
+            temp[:, :] = self.inputs_ori
+            self.inputs  = np.zeros([self.batch_count, self.seq_length-self.cell_units_feature_len+1, self.cell_units_feature_len])
+            for i in range(self.seq_length-self.cell_units_feature_len+1):
+                self.inputs[:, i, :] = self.inputs_ori[:, i:i+self.cell_units_feature_len]
 
             self.targets = tf.placeholder(tf.float32, shape=(self.batch_count, self.seq_gen_length), name='targets')
             self.keep_prob= tf.placeholder(tf.float32, name='prob')
@@ -37,7 +42,7 @@ class EcgGenerator:
             drop = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=out_keep_prob)
             return drop
         with tf.name_scope('lstm_model'):
-            self.cells = tf.nn.rnn_cell.MultiRNNCell([_get_cell(self.cell_units_count, self.keep_prob) for _ in range(self.layer_count)])
+            self.cells = tf.nn.rnn_cell.MultiLSTMCell([_get_cell(self.cell_units_count, self.keep_prob) for _ in range(self.layer_count)])
             self.init_state = self.cells.zero_state(self.batch_count, tf.float32)
 
             self.lstm_out, self.lstm_state = tf.nn.dynamic_rnn(self.cells, self.inputs, initial_state=self.init_state)
@@ -52,7 +57,10 @@ class EcgGenerator:
 #                self.output = self.inputs_output[:, -1]
 #                self.output = tf.expand_dims(self.output, 1)
 #                self.inputs_output = self.inputs_output[:, :-1]
-                new_input = tf.expand_dims(self.inputs_output[:, -1], 1)
+                #new_input = tf.expand_dims(self.inputs_output[:, -1], 1)
+                new_input = np.zeros(self.batch_count, self.cell_units_feature_len)
+                new_input[:, :-1] = self.inputs[:, -1: 1:]
+                new_input[:, -1] = self.inputs_output[:, -1]
                 new_state = self.lstm_state
                 
                 output = list()
@@ -62,15 +70,16 @@ class EcgGenerator:
                     self.lstm_out, new_state = self.cells(new_input, new_state)
                     x = tf.reshape(self.lstm_out, [-1, self.cell_units_count])
                     y = tf.matmul(x, w) + b 
-                    new_input = tf.reshape(y, [self.batch_count, -1])
+                    new_input[:,  :-1] = new_input[:, 1:]
+                    new_input[:,  -1] = y#tf.reshape(y, [self.batch_count, -1])
 #                    self.output = tf.concat([self.output, tf.reshape(y, [self.batch_count, -1])], 1)
-                    output.append(new_input[:, 0])
+                    output.append(y[:, 0])
 
                 self.output = tf.transpose(output, [1, 0])
 
     def build_loss(self):
         with tf.name_scope('loss'):
-            self.input_loss = tf.reduce_mean(tf.nn.l2_loss(self.inputs_output[:, :-1] - self.inputs_ori[:, 1:]))
+            self.input_loss = tf.reduce_mean(tf.nn.l2_loss(self.inputs_output[:, :-1] - self.inputs_ori[:, self.cell_units_feature_len:]))
             self.predict_loss = tf.reduce_mean(tf.nn.l2_loss(self.output - self.targets))
             self.loss = self.input_loss + self.predict_loss
 
