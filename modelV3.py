@@ -26,11 +26,18 @@ class EcgGenerator:
         with tf.name_scope('input'):
             self.inputs_ori = tf.placeholder(tf.float32, shape=(self.batch_count, self.seq_length), name='inputs')
 
-            temp = np.zeros([self.batch_count, self.seq_length])
-            temp[:, :] = self.inputs_ori
-            self.inputs  = np.zeros([self.batch_count, self.seq_length-self.cell_units_feature_len+1, self.cell_units_feature_len])
-            for i in range(self.seq_length-self.cell_units_feature_len+1):
-                self.inputs[:, i, :] = self.inputs_ori[:, i:i+self.cell_units_feature_len]
+#            self.inputs  = np.zeros([self.batch_count, self.seq_length-self.cell_units_feature_len+1, self.cell_units_feature_len])
+#            for i in range(self.seq_length-self.cell_units_feature_len+1):
+#                self.inputs[:, i, :] = self.inputs_ori[:, i:i+self.cell_units_feature_len]
+
+            inputs = list()
+            for bi in range(self.batch_count):
+                b_list = list()
+                for si in range(self.seq_length-self.cell_units_feature_len+1):
+                    b_list.append(self.inputs_ori[bi, si:si+self.cell_units_feature_len])
+                inputs.append(b_list)
+
+            self.inputs = tf.reshape(inputs, [self.batch_count, self.seq_length-self.cell_units_feature_len+1, self.cell_units_feature_len])
 
             self.targets = tf.placeholder(tf.float32, shape=(self.batch_count, self.seq_gen_length), name='targets')
             self.keep_prob= tf.placeholder(tf.float32, name='prob')
@@ -42,7 +49,7 @@ class EcgGenerator:
             drop = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=out_keep_prob)
             return drop
         with tf.name_scope('lstm_model'):
-            self.cells = tf.nn.rnn_cell.MultiLSTMCell([_get_cell(self.cell_units_count, self.keep_prob) for _ in range(self.layer_count)])
+            self.cells = tf.nn.rnn_cell.MultiRNNCell([_get_cell(self.cell_units_count, self.keep_prob) for _ in range(self.layer_count)])
             self.init_state = self.cells.zero_state(self.batch_count, tf.float32)
 
             self.lstm_out, self.lstm_state = tf.nn.dynamic_rnn(self.cells, self.inputs, initial_state=self.init_state)
@@ -58,9 +65,8 @@ class EcgGenerator:
 #                self.output = tf.expand_dims(self.output, 1)
 #                self.inputs_output = self.inputs_output[:, :-1]
                 #new_input = tf.expand_dims(self.inputs_output[:, -1], 1)
-                new_input = np.zeros(self.batch_count, self.cell_units_feature_len)
-                new_input[:, :-1] = self.inputs[:, -1: 1:]
-                new_input[:, -1] = self.inputs_output[:, -1]
+
+                new_input = tf.concat((self.inputs[:, -1, 1:], tf.expand_dims(self.inputs_output[:, -1], 1)), 1)
                 new_state = self.lstm_state
                 
                 output = list()
@@ -70,8 +76,10 @@ class EcgGenerator:
                     self.lstm_out, new_state = self.cells(new_input, new_state)
                     x = tf.reshape(self.lstm_out, [-1, self.cell_units_count])
                     y = tf.matmul(x, w) + b 
-                    new_input[:,  :-1] = new_input[:, 1:]
-                    new_input[:,  -1] = y#tf.reshape(y, [self.batch_count, -1])
+
+                    new_input = tf.concat((new_input[:, 1:], y), 1)
+                   # new_input[:,  :-1] = new_input[:, 1:]
+                   # new_input[:,  -1] = y#tf.reshape(y, [self.batch_count, -1])
 #                    self.output = tf.concat([self.output, tf.reshape(y, [self.batch_count, -1])], 1)
                     output.append(y[:, 0])
 
@@ -126,12 +134,12 @@ class EcgGenerator:
 
     def eval(self, ecg_data_gen_len, prefix_ecg_data):
         samples = [d for d in prefix_ecg_data]
-        x = np.zeros([1, 1])
+        x = np.zeros([1, self.cell_units_feature_len])
         sess = self.sess
         new_state = sess.run(self.init_state)
 
-        for data in prefix_ecg_data:
-            x[0, 0] = data
+        for i in range(len(prefix_ecg_data)-self.cell_units_feature_len+1):
+            x[0, :] = prefix_ecg_data[i:i+self.cell_units_feature_len]
             output, new_state = sess.run([self.output, self.lstm_state], 
                             feed_dict={self.inputs_ori:x,  
                                        self.init_state:new_state,
@@ -139,7 +147,8 @@ class EcgGenerator:
                             })
         samples.append(output[0][0])
         for _ in range(ecg_data_gen_len):
-            x[0, 0] = samples[-1]
+            x[0, :-1] = x[0, 1:]
+            x[0, -1] = samples[-1]
             output, new_state = sess.run([self.output, self.lstm_state], 
                             feed_dict={self.inputs_ori:x,  
                                        self.init_state:new_state,

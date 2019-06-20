@@ -35,11 +35,10 @@ class EcgGenerator:
             drop = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=out_keep_prob)
             return drop
         with tf.name_scope('lstm_model'):
-            self.cells = tf.nn.rnn_cell.MultiLSTMCell([_get_cell(self.cell_units_count, self.keep_prob) for _ in range(self.layer_count)])
+            self.cells = tf.nn.rnn_cell.MultiRNNCell([_get_cell(self.cell_units_count, self.keep_prob) for _ in range(self.layer_count)])
             self.init_state = self.cells.zero_state(self.batch_count, tf.float32)
 
             self.lstm_out, self.lstm_state = tf.nn.dynamic_rnn(self.cells, self.inputs, initial_state=self.init_state)
-            self.loss = tf.Variable(0.0) 
             with tf.name_scope('output'):
                 x = tf.reshape(self.lstm_out, [-1, self.cell_units_count])
                 w = tf.Variable(tf.truncated_normal([self.cell_units_count, 1], stddev=0.1))
