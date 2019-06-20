@@ -11,7 +11,7 @@ batch_count = 100
 seq_length = field['fs']*3
 feature_length = field['fs']*2
 
-seq_gen_length = 1
+seq_gen_length = 20
 
 bg = batch_generator(data, batch_count, seq_length, seq_gen_length)
 

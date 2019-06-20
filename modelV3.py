@@ -44,8 +44,8 @@ class EcgGenerator:
     
     def build_model(self):
         def _get_cell(cell_units_count, out_keep_prob):
-            #cell = tf.nn.rnn_cell.BasicLSTMCell(cell_units_count)
-            cell = tf.nn.rnn_cell.BasicRNNCell(cell_units_count)
+            cell = tf.nn.rnn_cell.BasicLSTMCell(cell_units_count)
+            #cell = tf.nn.rnn_cell.BasicRNNCell(cell_units_count)
             drop = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=out_keep_prob)
             return drop
         with tf.name_scope('lstm_model'):
@@ -53,11 +53,11 @@ class EcgGenerator:
             self.init_state = self.cells.zero_state(self.batch_count, tf.float32)
 
             self.lstm_out, self.lstm_state = tf.nn.dynamic_rnn(self.cells, self.inputs, initial_state=self.init_state)
-            self.loss = tf.Variable(0.0) 
+            self.loss = tf.Variable(0.0, name = 'loss') 
             with tf.name_scope('output'):
                 x = tf.reshape(self.lstm_out, [-1, self.cell_units_count])
-                w = tf.Variable(tf.truncated_normal([self.cell_units_count, 1], stddev=0.1))
-                b = tf.Variable(tf.zeros(1))
+                w = tf.Variable(tf.truncated_normal([self.cell_units_count, 1], stddev=0.1), name = 'w')
+                b = tf.Variable(tf.zeros(1), name = 'b')
                 y = tf.matmul(x, w) + b #已知数据的预测
                 self.inputs_output = tf.reshape(y, [self.batch_count, -1]) #前缀输入数据的输出
 
@@ -157,6 +157,13 @@ class EcgGenerator:
             samples.append(output[0][0])
         return np.array(samples)
 
+    def outparameter(self):
+        variable_names = [v.name for v in tf.trainable_variables()]
+        values = self.sess.run(variable_names)
+        for k,v in zip(variable_names, values):
+            print("Variable: ", k)
+            print("Shape: ", v.shape)
+            print(v)
     def load(self, checkpoint):
         self.sess = tf.Session()
         self.saver.restore(self.sess, checkpoint)
