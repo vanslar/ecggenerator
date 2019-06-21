@@ -3,6 +3,7 @@
 import modelV3 as model
 import wfdb
 import tensorflow as tf
+import matplotlib.pyplot as plt
 
 
 sig, field = wfdb.rdsamp('Data/1201_5')
@@ -23,3 +24,6 @@ result = Model.eval(10000, pre_data)
 with open('result.txt', 'w') as fid:
     for i in result:
         fid.write(str(i)+'\n')
+
+plt.plot(result)
+plt.show()

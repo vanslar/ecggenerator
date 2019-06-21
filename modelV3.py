@@ -138,6 +138,7 @@ class EcgGenerator:
         sess = self.sess
         new_state = sess.run(self.init_state)
 
+        output = np.zeros([self.batch_count, 1])
         for i in range(len(prefix_ecg_data)-self.cell_units_feature_len+1):
             x[0, :] = prefix_ecg_data[i:i+self.cell_units_feature_len]
             output, new_state = sess.run([self.output, self.lstm_state], 
